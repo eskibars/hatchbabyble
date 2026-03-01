@@ -40,11 +40,24 @@ class Rest(object):
     self._gatt_obj = adapter.connect(self._mac_address, address_type=pygatt.BLEAddressType.random, timeout=self._timeout)
     self.update_status()
 
-  def update_status(self):
+  def update_status(self, retries=3):
     if self._gatt_obj == None:
       raise Exception('Could not update status.  Have you not connected yet?')
 
-    status_bytearray = self._gatt_obj.char_read("02260002-5efd-47eb-9c1a-de53f7a2b232")
+    import time
+    for attempt in range(retries):
+      status_bytearray = self._gatt_obj.char_read("02260002-5efd-47eb-9c1a-de53f7a2b232")
+      if len(status_bytearray) >= 15:
+        break
+      if attempt < retries - 1:
+        time.sleep(0.5)
+    else:
+      raise Exception(
+        'Status read returned {} bytes (expected 15). '
+        'The device may not be a Hatch Rest, or it may need to be '
+        'power-cycled.'.format(len(status_bytearray))
+      )
+
     self._command_num = int.from_bytes(status_bytearray[4:5], byteorder='big', signed=False)
     [self._red, self._green, self._blue, self._brightness] = status_bytearray[6:10]
     [self._song, self._volume] = status_bytearray[11:13]
